@@ -342,59 +342,97 @@
                 setIsFlipped(false);
             };
 
+            const reloadFromCloud = async () => {
+                if (!db || !userId) {
+                    alert('雲端尚未準備好，請稍後再試。');
+                    return;
+                }
+                try {
+                    setCloudStatus('loading');
+                    setCloudMessage('正在從雲端重新載入...');
+                    const docRef = db.collection('ankiKidsUsers').doc(userId);
+                    const snap = await docRef.get();
+                    const data = snap.data();
+                    if (snap.exists && data && Array.isArray(data.cards)) {
+                        setAllCards(data.cards);
+                        setCloudStatus('ok');
+                        setCloudMessage('已從雲端重新載入 ' + new Date().toLocaleString());
+                    } else {
+                        setCloudStatus('error');
+                        setCloudMessage('雲端目前沒有資料');
+                    }
+                } catch (e) {
+                    console.error('重載雲端失敗', e);
+                    setCloudStatus('error');
+                    setCloudMessage('重載雲端失敗');
+                }
+            };
+
             // --- 視圖組件 ---
-            const Header = () => (
-                <div className="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-10">
-                    <div className="flex items-center gap-2">
-                        {view !== 'home' ? (
+            const Header = () => {
+                const dataSizeKB = Math.round(JSON.stringify(allCards).length / 1024);
+                return (
+                    <div className="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-10">
+                        <div className="flex items-center gap-2">
+                            {view !== 'home' ? (
+                                <button
+                                    onClick={handleBack}
+                                    className="p-2 hover:bg-gray-100 rounded-full text-gray-700 flex items-center gap-1"
+                                >
+                                    <Icons.ChevronLeft className="w-5 h-5" />
+                                    <span className="text-sm hidden sm:inline">返回</span>
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => setView('settings')}
+                                    className="p-2 hover:bg-gray-100 rounded-full text-gray-600 flex items-center gap-1"
+                                >
+                                    <Icons.Settings className="w-5 h-5" />
+                                    <span className="text-sm hidden sm:inline">設定/資料</span>
+                                </button>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                            {userId && (
+                                <div className="flex flex-col items-end mr-2">
+                                    <span className="text-xs text-gray-500">👤 {userId}</span>
+                                    {cloudStatus === 'loading' && (
+                                        <span className="text-[10px] text-blue-500">☁️ 與雲端同步中…</span>
+                                    )}
+                                    {cloudStatus === 'ok' && (
+                                        <span className="text-[10px] text-green-600">☁️ 雲端已連線</span>
+                                    )}
+                                    {cloudStatus === 'error' && (
+                                        <span className="text-[10px] text-red-500">☁️ 雲端錯誤</span>
+                                    )}
+                                    {cloudMessage && (
+                                        <span className="text-[10px] text-gray-400 mt-0.5">{cloudMessage}</span>
+                                    )}
+                                    <span className="text-[10px] text-gray-400 mt-0.5">
+                                        卡片數：{allCards.length}，約 {dataSizeKB} KB
+                                    </span>
+                                </div>
+                            )}
                             <button
-                                onClick={handleBack}
-                                className="p-2 hover:bg-gray-100 rounded-full text-gray-700 flex items-center gap-1"
+                                onClick={reloadFromCloud}
+                                className="px-2 py-1 text-[10px] border rounded-md text-gray-600 hover:bg-gray-100"
                             >
-                                <Icons.ChevronLeft className="w-5 h-5" />
-                                <span className="text-sm hidden sm:inline">返回</span>
+                                重新載入雲端
                             </button>
-                        ) : (
-                            <button
-                                onClick={() => setView('settings')}
-                                className="p-2 hover:bg-gray-100 rounded-full text-gray-600 flex items-center gap-1"
-                            >
-                                <Icons.Settings className="w-5 h-5" />
-                                <span className="text-sm hidden sm:inline">設定/資料</span>
-                            </button>
-                        )}
+                            <span className="text-sm text-gray-500 hidden sm:inline ml-2">字體:</span>
+                            <input
+                                type="range"
+                                min="1"
+                                max="3"
+                                step="0.1"
+                                value={fontSize}
+                                onChange={(e) => setFontSize(parseFloat(e.target.value))}
+                                className="w-20 accent-blue-500"
+                            />
+                        </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                        {userId && (
-                            <div className="flex flex-col items-end mr-2">
-                                <span className="text-xs text-gray-500">👤 {userId}</span>
-                                {cloudStatus === 'loading' && (
-                                    <span className="text-[10px] text-blue-500">☁️ 與雲端同步中…</span>
-                                )}
-                                {cloudStatus === 'ok' && (
-                                    <span className="text-[10px] text-green-600">☁️ 雲端已連線</span>
-                                )}
-                                {cloudStatus === 'error' && (
-                                    <span className="text-[10px] text-red-500">☁️ 雲端錯誤</span>
-                                )}
-                                {cloudMessage && (
-                                    <span className="text-[10px] text-gray-400 mt-0.5">{cloudMessage}</span>
-                                )}
-                            </div>
-                        )}
-                        <span className="text-sm text-gray-500 hidden sm:inline ml-2">字體:</span>
-                        <input
-                            type="range"
-                            min="1"
-                            max="3"
-                            step="0.1"
-                            value={fontSize}
-                            onChange={(e) => setFontSize(parseFloat(e.target.value))}
-                            className="w-20 accent-blue-500"
-                        />
-                    </div>
-                </div>
-            );
+                );
+            };
 
             const SettingsView = () => (
                 <div className="p-4 max-w-2xl mx-auto animate-fade-in-up">
