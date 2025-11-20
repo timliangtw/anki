@@ -16,11 +16,10 @@
     
     <style>
         html, body {
-            /* 防止手機雙擊縮放，並優化觸控體驗 */
             touch-action: manipulation;
             font-family: "Noto Sans TC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #f0f9ff;
-            overscroll-behavior-y: none; /* 防止下拉刷新 */
+            overscroll-behavior-y: none;
             height: 100%;
             margin: 0;
         }
@@ -28,7 +27,6 @@
             transition: transform 0.6s;
             transform-style: preserve-3d;
         }
-        /* 隱藏 Scrollbar 但保持功能 */
         .no-scrollbar::-webkit-scrollbar {
             display: none;
         }
@@ -49,129 +47,95 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useRef } = React;
 
-        // --- 內建圖示元件 (解決外部引用失敗問題) ---
+        // --- 內建圖示元件 ---
         const Icons = {
             BookOpen: (props) => (
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
             ),
             ChevronLeft: (props) => (
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-                    <path d="m15 18-6-6 6-6"/>
-                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m15 18-6-6 6-6"/></svg>
             ),
             Home: (props) => (
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
-                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
             ),
             Trophy: (props) => (
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
-                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+            ),
+            Settings: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.35a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            ),
+            Trash2: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+            ),
+            Upload: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
             )
         };
 
-        // --- 初始資料庫 (Mock Data for Taiwan Elementary School) ---
+        // --- 初始資料庫 ---
         const INITIAL_DATA = [
             // --- 國語 ---
             { id: 'm1-1', subject: 'mandarin', grade: 1, front: '天', back: 'ㄊㄧㄢ', context: '今天天氣很好。', level: 'new' },
             { id: 'm1-2', subject: 'mandarin', grade: 1, front: '大', back: 'ㄉㄚˋ', context: '這顆蘋果很大。', level: 'new' },
             { id: 'm1-3', subject: 'mandarin', grade: 1, front: '手', back: 'ㄕㄡˇ', context: '請把手洗乾淨。', level: 'new' },
             { id: 'm2-1', subject: 'mandarin', grade: 2, front: '海', back: 'ㄏㄞˇ', context: '我想去海邊玩水。', level: 'new' },
-            { id: 'm2-2', subject: 'mandarin', grade: 2, front: '亮', back: 'ㄌㄧㄤˋ', context: '月亮出來了。', level: 'new' },
-            { id: 'm3-1', subject: 'mandarin', grade: 3, front: '無論', back: 'ㄨˊ ㄌㄨㄣˋ', context: '無論發生什麼事，我都會陪著你。', level: 'new' },
-            { id: 'm3-2', subject: 'mandarin', grade: 3, front: '希望', back: 'ㄒㄧ ㄨㄤˋ', context: '我希望明天不用考試。', level: 'new' },
-            { id: 'm4-1', subject: 'mandarin', grade: 4, front: '猶豫', back: 'ㄧㄡˊ ㄩˋ', context: '他猶豫了很久，不知道該選哪一個。', level: 'new' },
-            { id: 'm5-1', subject: 'mandarin', grade: 5, front: '蜿蜒', back: 'ㄨㄢ ㄧㄢˊ', context: '這條河流蜿蜒流過平原。', level: 'new' },
-            { id: 'm6-1', subject: 'mandarin', grade: 6, front: '躊躇', back: 'ㄔㄡˊ ㄔㄨˊ', context: '他在門口躊躇不前，不敢進去。', level: 'new' },
-            
             // --- 英文 ---
             { id: 'e1-1', subject: 'english', grade: 1, front: 'Apple', back: '蘋果', context: 'I like to eat apples.', level: 'new' },
             { id: 'e1-2', subject: 'english', grade: 1, front: 'Red', back: '紅色', context: 'The car is red.', level: 'new' },
             { id: 'e1-3', subject: 'english', grade: 1, front: 'Cat', back: '貓', context: 'The cat is sleeping.', level: 'new' },
-            { id: 'e2-1', subject: 'english', grade: 2, front: 'Tiger', back: '老虎', context: 'Tigers are big cats.', level: 'new' },
-            { id: 'e2-2', subject: 'english', grade: 2, front: 'Jump', back: '跳', context: 'Can you jump high?', level: 'new' },
-            { id: 'e3-1', subject: 'english', grade: 3, front: 'Beautiful', back: '美麗的', context: 'The flower is beautiful.', level: 'new' },
-            { id: 'e3-2', subject: 'english', grade: 3, front: 'Teacher', back: '老師', context: 'My teacher works hard.', level: 'new' },
-            { id: 'e4-1', subject: 'english', grade: 4, front: 'Delicious', back: '美味的', context: 'This soup is delicious.', level: 'new' },
-            { id: 'e4-2', subject: 'english', grade: 4, front: 'Yesterday', back: '昨天', context: 'I went to the park yesterday.', level: 'new' },
-            { id: 'e5-1', subject: 'english', grade: 5, front: 'Environment', back: '環境', context: 'We should protect the environment.', level: 'new' },
-            { id: 'e6-1', subject: 'english', grade: 6, front: 'Pollution', back: '汙染', context: 'Air pollution is a big problem.', level: 'new' },
-            { id: 'e6-2', subject: 'english', grade: 6, front: 'Diligent', back: '勤勉的', context: 'He is a diligent student.', level: 'new' },
         ];
 
         // --- Helper Functions ---
-        
         const loadData = () => {
             try {
                 const saved = localStorage.getItem('anki-kids-data-v1');
-                if (saved) {
-                    return JSON.parse(saved);
-                }
-            } catch (e) {
-                console.error("讀取資料失敗，使用預設值", e);
-            }
-            // 初始化
-            return INITIAL_DATA.map(card => ({
-                ...card,
-                interval: 0,
-                reps: 0,
-                ease: 2.5,
-                dueDate: Date.now()
-            }));
+                if (saved) return JSON.parse(saved);
+            } catch (e) { console.error("讀取失敗", e); }
+            return INITIAL_DATA.map(card => ({ ...card, interval: 0, reps: 0, ease: 2.5, dueDate: Date.now() }));
         };
 
         const saveData = (data) => {
-            try {
-                localStorage.setItem('anki-kids-data-v1', JSON.stringify(data));
-            } catch (e) {
-                console.error("儲存資料失敗", e);
-            }
+            try { localStorage.setItem('anki-kids-data-v1', JSON.stringify(data)); } catch (e) { console.error("儲存失敗", e); }
         };
 
         // --- 主程式 App ---
         function App() {
             const [allCards, setAllCards] = useState(loadData);
-            const [view, setView] = useState('home'); // home, study, finish
-            const [selectedDeck, setSelectedDeck] = useState(null); // { subject, grade }
+            const [view, setView] = useState('home'); // home, study, finish, settings
+            const [selectedDeck, setSelectedDeck] = useState(null); 
             const [studyQueue, setStudyQueue] = useState([]);
             const [currentCardIndex, setCurrentCardIndex] = useState(0);
             const [isFlipped, setIsFlipped] = useState(false);
-            const [fontSize, setFontSize] = useState(1.5); // rem unit
+            const [fontSize, setFontSize] = useState(1.5);
+            const fileInputRef = useRef(null);
 
-            useEffect(() => {
-                saveData(allCards);
-            }, [allCards]);
+            // 設定頁面狀態
+            const [settingsSubject, setSettingsSubject] = useState('mandarin');
+            const [settingsGrade, setSettingsGrade] = useState(1);
+
+            useEffect(() => { saveData(allCards); }, [allCards]);
 
             const getDueCount = (subject, grade) => {
                 const now = Date.now();
-                return allCards.filter(c => 
-                    c.subject === subject && 
-                    c.grade === grade && 
-                    c.dueDate <= now
-                ).length;
+                return allCards.filter(c => c.subject === subject && c.grade === grade && c.dueDate <= now).length;
             };
 
+            const getTotalCount = (subject, grade) => {
+                return allCards.filter(c => c.subject === subject && c.grade === grade).length;
+            };
+
+            // --- 學習邏輯 ---
             const startStudy = (subject, grade) => {
                 const now = Date.now();
-                const queue = allCards.filter(c => 
-                    c.subject === subject && 
-                    c.grade === grade && 
-                    c.dueDate <= now
-                );
-                
+                const queue = allCards.filter(c => c.subject === subject && c.grade === grade && c.dueDate <= now);
                 const shuffled = queue.sort(() => Math.random() - 0.5);
 
                 if (shuffled.length === 0) {
-                    // 使用 setTimeout 避免 React 渲染中斷
                     setTimeout(() => alert("太棒了！這個科目目前沒有需要複習的卡片。"), 100);
                     return;
                 }
-
                 setSelectedDeck({ subject, grade });
                 setStudyQueue(shuffled);
                 setCurrentCardIndex(0);
@@ -183,26 +147,17 @@
                 const currentCard = studyQueue[currentCardIndex];
                 let { interval, reps, ease } = currentCard;
 
-                if (rating === 0) { // Again
-                    reps = 0;
-                    interval = 0;
+                if (rating === 0) { 
+                    reps = 0; interval = 0;
                 } else {
-                    if (rating === 1) { // Hard
-                        ease = Math.max(1.3, ease - 0.15);
-                        interval = interval === 0 ? 1 : interval * 1.2;
-                    } else if (rating === 2) { // Good
-                        interval = interval === 0 ? 1 : (reps === 1 ? 6 : interval * ease);
-                    } else if (rating === 3) { // Easy
-                        ease += 0.15;
-                        interval = interval === 0 ? 4 : interval * ease * 1.3;
-                    }
+                    if (rating === 1) { ease = Math.max(1.3, ease - 0.15); interval = interval === 0 ? 1 : interval * 1.2; }
+                    else if (rating === 2) { interval = interval === 0 ? 1 : (reps === 1 ? 6 : interval * ease); }
+                    else if (rating === 3) { ease += 0.15; interval = interval === 0 ? 4 : interval * ease * 1.3; }
                     reps += 1;
                 }
 
                 let newDueDate = Date.now();
-                if (rating > 0) {
-                    newDueDate = Date.now() + (Math.ceil(interval) * 24 * 60 * 60 * 1000);
-                }
+                if (rating > 0) newDueDate = Date.now() + (Math.ceil(interval) * 24 * 60 * 60 * 1000);
 
                 const updatedCard = { ...currentCard, interval, reps, ease, dueDate: newDueDate };
                 const newAllCards = allCards.map(c => c.id === updatedCard.id ? updatedCard : c);
@@ -214,14 +169,71 @@
                     setCurrentCardIndex(prev => prev + 1); 
                 } else {
                     setIsFlipped(false);
-                    if (currentCardIndex < studyQueue.length - 1) {
-                        setCurrentCardIndex(prev => prev + 1);
-                    } else {
-                        setView('finish');
-                    }
+                    if (currentCardIndex < studyQueue.length - 1) setCurrentCardIndex(prev => prev + 1);
+                    else setView('finish');
                 }
             };
 
+            // --- 設定功能邏輯 ---
+            const handleResetProgress = () => {
+                const confirmReset = confirm(`確定要清除「${settingsGrade}年級 ${settingsSubject === 'mandarin' ? '國語' : '英文'}」的所有學習記憶嗎？\n\n這會將所有卡片變回「新卡片」。`);
+                if (!confirmReset) return;
+
+                const newAllCards = allCards.map(card => {
+                    if (card.subject === settingsSubject && card.grade === parseInt(settingsGrade)) {
+                        return { ...card, interval: 0, reps: 0, ease: 2.5, dueDate: Date.now() };
+                    }
+                    return card;
+                });
+                setAllCards(newAllCards);
+                alert("學習記憶已清除！");
+            };
+
+            const handleFileUpload = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const text = e.target.result;
+                        const lines = text.split('\n');
+                        const newCards = [];
+                        const timestamp = Date.now();
+
+                        lines.forEach((line, index) => {
+                            const parts = line.trim().split('|');
+                            if (parts.length >= 2) {
+                                newCards.push({
+                                    id: `custom-${timestamp}-${index}`,
+                                    subject: settingsSubject,
+                                    grade: parseInt(settingsGrade),
+                                    front: parts[0].trim(),
+                                    back: parts[1].trim(),
+                                    context: parts[2] ? parts[2].trim() : '',
+                                    level: 'new',
+                                    interval: 0, reps: 0, ease: 2.5, dueDate: Date.now()
+                                });
+                            }
+                        });
+
+                        if (newCards.length > 0) {
+                            setAllCards(prev => [...prev, ...newCards]);
+                            alert(`成功匯入 ${newCards.length} 張卡片到「${settingsGrade}年級 ${settingsSubject === 'mandarin' ? '國語' : '英文'}」！`);
+                        } else {
+                            alert("檔案內容格式似乎不正確，找不到可匯入的卡片。\n請確認使用「|」分隔內容。");
+                        }
+                    } catch (error) {
+                        console.error(error);
+                        alert("讀取檔案時發生錯誤。");
+                    }
+                    // 重置 input 讓使用者可以重複上傳同個檔案
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                };
+                reader.readAsText(file);
+            };
+
+            // --- 視圖組件 ---
             const Header = () => (
                 <div className="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-10">
                     <div className="flex items-center gap-2">
@@ -236,14 +248,89 @@
                         </h1>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-500 hidden sm:inline">字體:</span>
-                        <input 
-                            type="range" 
-                            min="1" max="3" step="0.1" 
-                            value={fontSize} 
-                            onChange={(e) => setFontSize(parseFloat(e.target.value))}
-                            className="w-20 accent-blue-500"
-                        />
+                        {view === 'home' && (
+                            <button onClick={() => setView('settings')} className="p-2 hover:bg-gray-100 rounded-full text-gray-600 flex items-center gap-1">
+                                <Icons.Settings className="w-5 h-5" />
+                                <span className="text-sm hidden sm:inline">設定/資料</span>
+                            </button>
+                        )}
+                        <span className="text-sm text-gray-500 hidden sm:inline ml-2">字體:</span>
+                        <input type="range" min="1" max="3" step="0.1" value={fontSize} onChange={(e) => setFontSize(parseFloat(e.target.value))} className="w-20 accent-blue-500" />
+                    </div>
+                </div>
+            );
+
+            const SettingsView = () => (
+                <div className="p-4 max-w-2xl mx-auto animate-fade-in-up">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                        <Icons.Settings className="w-8 h-8 text-blue-600" />
+                        設定與資料管理
+                    </h2>
+                    
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-blue-100 mb-6">
+                        <h3 className="font-bold text-lg mb-4 border-b pb-2">1. 選擇要管理的類別</h3>
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="block text-sm text-gray-500 mb-1">科目</label>
+                                <select 
+                                    value={settingsSubject} 
+                                    onChange={(e) => setSettingsSubject(e.target.value)}
+                                    className="w-full p-3 border rounded-xl bg-gray-50 text-lg font-medium"
+                                >
+                                    <option value="mandarin">🇹🇼 國語</option>
+                                    <option value="english">🇺🇸 英文</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm text-gray-500 mb-1">年級</label>
+                                <select 
+                                    value={settingsGrade} 
+                                    onChange={(e) => setSettingsGrade(e.target.value)}
+                                    className="w-full p-3 border rounded-xl bg-gray-50 text-lg font-medium"
+                                >
+                                    {[1,2,3,4,5,6].map(g => <option key={g} value={g}>{g} 年級</option>)}
+                                </select>
+                            </div>
+                        </div>
+                        <div className="text-sm text-gray-500 mb-2">
+                            目前此類別共有 <span className="font-bold text-blue-600 text-lg">{getTotalCount(settingsSubject, parseInt(settingsGrade))}</span> 張卡片
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-red-100 mb-6">
+                        <h3 className="font-bold text-lg text-red-600 mb-4 border-b pb-2 flex items-center gap-2">
+                            <Icons.Trash2 className="w-5 h-5" />
+                            2. 清除學習記憶
+                        </h3>
+                        <p className="text-gray-600 mb-4 text-sm">
+                            如果你覺得這個分類的卡片太久沒複習，進度亂掉了，可以按這個按鈕。
+                            所有卡片會變成「新卡片」，你可以重新開始學習。
+                        </p>
+                        <button 
+                            onClick={handleResetProgress}
+                            className="w-full py-3 rounded-xl border-2 border-red-400 text-red-600 font-bold hover:bg-red-50 active:bg-red-100 transition-colors"
+                        >
+                            清除此類別的學習進度
+                        </button>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-green-100 mb-6">
+                        <h3 className="font-bold text-lg text-green-700 mb-4 border-b pb-2 flex items-center gap-2">
+                            <Icons.Upload className="w-5 h-5" />
+                            3. 匯入自訂資料
+                        </h3>
+                        <p className="text-gray-600 mb-4 text-sm">
+                            請上傳 <b>.txt</b> 文字檔。每一行代表一張卡片，格式如下：<br/>
+                            <code className="bg-gray-100 px-2 py-1 rounded text-gray-800 block mt-2">正面(題目) | 背面(答案) | 例句(選填)</code>
+                            <span className="text-xs text-gray-400 mt-1 block">例如：Apple | 蘋果 | I eat an apple.</span>
+                        </p>
+                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-green-300 border-dashed rounded-xl cursor-pointer bg-green-50 hover:bg-green-100 transition-colors">
+                            <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                <Icons.Upload className="w-8 h-8 text-green-500 mb-2" />
+                                <p className="mb-2 text-sm text-green-700"><span className="font-semibold">點擊上傳 TXT 檔案</span></p>
+                            </div>
+                            <input ref={fileInputRef} type="file" className="hidden" accept=".txt" onChange={handleFileUpload} />
+                        </label>
                     </div>
                 </div>
             );
@@ -259,26 +346,15 @@
                         {/* 國語區塊 */}
                         <div className="bg-white rounded-2xl shadow-md overflow-hidden border-2 border-orange-100">
                             <div className="bg-orange-100 p-3 font-bold text-orange-800 flex items-center gap-2">
-                                <span className="text-2xl">🇹🇼</span> 國語 (國字、注音)
+                                <span className="text-2xl">🇹🇼</span> 國語
                             </div>
                             <div className="p-4 grid grid-cols-3 gap-3">
                                 {[1, 2, 3, 4, 5, 6].map(grade => {
                                     const count = getDueCount('mandarin', grade);
                                     return (
-                                        <button 
-                                            key={grade}
-                                            onClick={() => startStudy('mandarin', grade)}
-                                            className={`aspect-square rounded-xl flex flex-col items-center justify-center border-2 transition-all active:scale-95 ${
-                                                count > 0 ? 'bg-orange-50 border-orange-200 hover:bg-orange-100' : 'bg-gray-50 border-gray-100 text-gray-400'
-                                            }`}
-                                        >
-                                            <span className="text-2xl font-bold">{grade}</span>
-                                            <span className="text-xs">年級</span>
-                                            {count > 0 && (
-                                                <span className="mt-1 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-                                                    {count}
-                                                </span>
-                                            )}
+                                        <button key={grade} onClick={() => startStudy('mandarin', grade)} className={`aspect-square rounded-xl flex flex-col items-center justify-center border-2 transition-all active:scale-95 ${count > 0 ? 'bg-orange-50 border-orange-200 hover:bg-orange-100' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
+                                            <span className="text-2xl font-bold">{grade}</span><span className="text-xs">年級</span>
+                                            {count > 0 && <span className="mt-1 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{count}</span>}
                                         </button>
                                     )
                                 })}
@@ -288,26 +364,15 @@
                         {/* 英文區塊 */}
                         <div className="bg-white rounded-2xl shadow-md overflow-hidden border-2 border-indigo-100">
                             <div className="bg-indigo-100 p-3 font-bold text-indigo-800 flex items-center gap-2">
-                                <span className="text-2xl">🇺🇸</span> English (單字)
+                                <span className="text-2xl">🇺🇸</span> English
                             </div>
                             <div className="p-4 grid grid-cols-3 gap-3">
                                 {[1, 2, 3, 4, 5, 6].map(grade => {
                                     const count = getDueCount('english', grade);
                                     return (
-                                        <button 
-                                            key={grade}
-                                            onClick={() => startStudy('english', grade)}
-                                            className={`aspect-square rounded-xl flex flex-col items-center justify-center border-2 transition-all active:scale-95 ${
-                                                count > 0 ? 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100' : 'bg-gray-50 border-gray-100 text-gray-400'
-                                            }`}
-                                        >
-                                            <span className="text-2xl font-bold">{grade}</span>
-                                            <span className="text-xs">Grade</span>
-                                            {count > 0 && (
-                                                <span className="mt-1 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-                                                    {count}
-                                                </span>
-                                            )}
+                                        <button key={grade} onClick={() => startStudy('english', grade)} className={`aspect-square rounded-xl flex flex-col items-center justify-center border-2 transition-all active:scale-95 ${count > 0 ? 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
+                                            <span className="text-2xl font-bold">{grade}</span><span className="text-xs">Grade</span>
+                                            {count > 0 && <span className="mt-1 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{count}</span>}
                                         </button>
                                     )
                                 })}
@@ -320,83 +385,38 @@
             const StudyView = () => {
                 const card = studyQueue[currentCardIndex];
                 if (!card) return null;
-
                 const progress = ((currentCardIndex) / studyQueue.length) * 100;
 
                 return (
                     <div className="flex flex-col h-[calc(100vh-70px)] bg-gray-100">
-                        <div className="h-2 bg-gray-200 w-full">
-                            <div className="h-full bg-green-500 transition-all duration-300" style={{ width: `${progress}%` }}></div>
-                        </div>
-
+                        <div className="h-2 bg-gray-200 w-full"><div className="h-full bg-green-500 transition-all duration-300" style={{ width: `${progress}%` }}></div></div>
                         <div className="flex-1 flex items-center justify-center p-4">
                             <div className="relative w-full max-w-xl aspect-[4/5] md:aspect-[16/9] perspective-1000">
                                 <div className={`relative w-full h-full bg-white rounded-3xl shadow-xl flex flex-col items-center justify-center p-8 text-center border-2 border-gray-200 transition-all duration-300`}>
-                                    
                                     <div className="mb-8">
-                                        <span className="inline-block bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-sm mb-4">
-                                            {card.subject === 'mandarin' ? '怎麼唸？' : 'What is this?'}
-                                        </span>
-                                        <h2 className="font-bold text-gray-800" style={{ fontSize: `${fontSize * 2}rem` }}>
-                                            {card.front}
-                                        </h2>
+                                        <span className="inline-block bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-sm mb-4">{card.subject === 'mandarin' ? '怎麼唸？' : 'What is this?'}</span>
+                                        <h2 className="font-bold text-gray-800" style={{ fontSize: `${fontSize * 2}rem` }}>{card.front}</h2>
                                     </div>
-
                                     {isFlipped && (
                                         <div className="animate-fade-in-up w-full pt-6 border-t-2 border-dashed border-gray-200">
-                                            <div className="text-red-500 font-bold mb-2" style={{ fontSize: `${fontSize * 1.2}rem` }}>
-                                                {card.back}
-                                            </div>
-                                            <div className="text-gray-600 bg-gray-50 p-4 rounded-xl" style={{ fontSize: `${fontSize}rem` }}>
-                                                {card.context}
-                                            </div>
+                                            <div className="text-red-500 font-bold mb-2" style={{ fontSize: `${fontSize * 1.2}rem` }}>{card.back}</div>
+                                            <div className="text-gray-600 bg-gray-50 p-4 rounded-xl" style={{ fontSize: `${fontSize}rem` }}>{card.context}</div>
                                         </div>
                                     )}
-
-                                    {!isFlipped && (
-                                        <button 
-                                            onClick={() => setIsFlipped(true)}
-                                            className="absolute inset-0 w-full h-full cursor-pointer opacity-0"
-                                        >
-                                            Reveal
-                                        </button>
-                                    )}
-                                    
-                                    {!isFlipped && (
-                                        <div className="absolute bottom-8 text-gray-400 text-sm animate-pulse pointer-events-none">
-                                            點擊卡片看答案
-                                        </div>
-                                    )}
+                                    {!isFlipped && <button onClick={() => setIsFlipped(true)} className="absolute inset-0 w-full h-full cursor-pointer opacity-0">Reveal</button>}
+                                    {!isFlipped && <div className="absolute bottom-8 text-gray-400 text-sm animate-pulse pointer-events-none">點擊卡片看答案</div>}
                                 </div>
                             </div>
                         </div>
-
                         <div className="h-auto bg-white border-t p-4 pb-8 md:pb-4 shadow-lg z-20">
                             {!isFlipped ? (
-                                <button 
-                                    onClick={() => setIsFlipped(true)}
-                                    className="w-full bg-blue-500 hover:bg-blue-600 text-white py-4 rounded-xl text-xl font-bold shadow-md transition-transform active:scale-95"
-                                >
-                                    顯示答案
-                                </button>
+                                <button onClick={() => setIsFlipped(true)} className="w-full bg-blue-500 hover:bg-blue-600 text-white py-4 rounded-xl text-xl font-bold shadow-md transition-transform active:scale-95">顯示答案</button>
                             ) : (
                                 <div className="grid grid-cols-4 gap-2 md:gap-4">
-                                    <button onClick={() => handleRate(0)} className="flex flex-col items-center bg-red-100 text-red-700 py-3 rounded-xl border border-red-200 active:bg-red-200">
-                                        <span className="font-bold text-lg">Again</span>
-                                        <span className="text-xs opacity-70">忘記了</span>
-                                    </button>
-                                    <button onClick={() => handleRate(1)} className="flex flex-col items-center bg-yellow-100 text-yellow-700 py-3 rounded-xl border border-yellow-200 active:bg-yellow-200">
-                                        <span className="font-bold text-lg">Hard</span>
-                                        <span className="text-xs opacity-70">有點難</span>
-                                    </button>
-                                    <button onClick={() => handleRate(2)} className="flex flex-col items-center bg-green-100 text-green-700 py-3 rounded-xl border border-green-200 active:bg-green-200">
-                                        <span className="font-bold text-lg">Good</span>
-                                        <span className="text-xs opacity-70">剛好</span>
-                                    </button>
-                                    <button onClick={() => handleRate(3)} className="flex flex-col items-center bg-blue-100 text-blue-700 py-3 rounded-xl border border-blue-200 active:bg-blue-200">
-                                        <span className="font-bold text-lg">Easy</span>
-                                        <span className="text-xs opacity-70">太簡單</span>
-                                    </button>
+                                    <button onClick={() => handleRate(0)} className="flex flex-col items-center bg-red-100 text-red-700 py-3 rounded-xl border border-red-200 active:bg-red-200"><span className="font-bold text-lg">Again</span><span className="text-xs opacity-70">忘記了</span></button>
+                                    <button onClick={() => handleRate(1)} className="flex flex-col items-center bg-yellow-100 text-yellow-700 py-3 rounded-xl border border-yellow-200 active:bg-yellow-200"><span className="font-bold text-lg">Hard</span><span className="text-xs opacity-70">有點難</span></button>
+                                    <button onClick={() => handleRate(2)} className="flex flex-col items-center bg-green-100 text-green-700 py-3 rounded-xl border border-green-200 active:bg-green-200"><span className="font-bold text-lg">Good</span><span className="text-xs opacity-70">剛好</span></button>
+                                    <button onClick={() => handleRate(3)} className="flex flex-col items-center bg-blue-100 text-blue-700 py-3 rounded-xl border border-blue-200 active:bg-blue-200"><span className="font-bold text-lg">Easy</span><span className="text-xs opacity-70">太簡單</span></button>
                                 </div>
                             )}
                         </div>
@@ -406,20 +426,11 @@
 
             const FinishView = () => (
                 <div className="flex flex-col items-center justify-center min-h-[80vh] p-4 text-center animate-fade-in">
-                    <div className="bg-yellow-100 p-8 rounded-full mb-6">
-                        <Icons.Trophy className="w-24 h-24 text-yellow-600" />
-                    </div>
+                    <div className="bg-yellow-100 p-8 rounded-full mb-6"><Icons.Trophy className="w-24 h-24 text-yellow-600" /></div>
                     <h2 className="text-3xl font-bold text-gray-800 mb-4">恭喜完成！</h2>
-                    <p className="text-xl text-gray-600 mb-8">
-                        {selectedDeck.grade} 年級 {selectedDeck.subject === 'mandarin' ? '國語' : '英文'} 複習完畢。
-                    </p>
+                    <p className="text-xl text-gray-600 mb-8">{selectedDeck.grade} 年級 {selectedDeck.subject === 'mandarin' ? '國語' : '英文'} 複習完畢。</p>
                     <div className="flex gap-4">
-                        <button 
-                            onClick={() => setView('home')}
-                            className="bg-blue-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition-all flex items-center gap-2"
-                        >
-                            <Icons.Home className="w-5 h-5" /> 回首頁
-                        </button>
+                        <button onClick={() => setView('home')} className="bg-blue-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition-all flex items-center gap-2"><Icons.Home className="w-5 h-5" /> 回首頁</button>
                     </div>
                 </div>
             );
@@ -428,6 +439,7 @@
                 <div className="min-h-screen bg-gray-50 text-gray-900">
                     <Header />
                     {view === 'home' && <HomeView />}
+                    {view === 'settings' && <SettingsView />}
                     {view === 'study' && <StudyView />}
                     {view === 'finish' && <FinishView />}
                 </div>
