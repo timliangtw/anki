@@ -13,6 +13,9 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <!-- Tailwind CSS 用於樣式 -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase (請先在下方填入你的專案設定) -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     
     <style>
         html, body {
@@ -48,6 +51,42 @@
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
+
+        // --- Firebase 設定（請到 Firebase Console 產生設定後，貼到這裡） ---
+        const FIREBASE_CONFIG = {
+			apiKey: "AIzaSyC3TBtkq_Q9jYSpcL_ZG091TtM2VynHmTM",
+			authDomain: "anki-kids.firebaseapp.com",
+			projectId: "anki-kids",
+			storageBucket: "anki-kids.firebasestorage.app",
+			messagingSenderId: "487633112892",
+			appId: "1:487633112892:web:8fb631f5061ff1d3bf5839"
+        };
+
+        let firebaseApp = null;
+        let db = null;
+
+        function initFirebase() {
+            if (!window.firebase) {
+                console.warn("Firebase SDK 尚未載入");
+                return null;
+            }
+            if (!firebase.apps.length) {
+                firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
+            } else {
+                firebaseApp = firebase.app();
+            }
+            db = firebase.firestore();
+            return db;
+        }
+
+        function getUserIdFromLocal() {
+            let id = localStorage.getItem('anki-kids-user-id');
+            if (!id) {
+                id = window.prompt('請輸入小朋友名稱或帳號，用來同步資料：', 'leo') || 'guest';
+                localStorage.setItem('anki-kids-user-id', id);
+            }
+            return id;
+        }
 
         // --- 內建圖示元件 ---
         const Icons = {
@@ -103,7 +142,11 @@
         // --- 主程式 App ---
         function App() {
             const [allCards, setAllCards] = useState(loadData);
+            const [userId, setUserId] = useState(null);
+            const [isCloudReady, setIsCloudReady] = useState(false);
             const [view, setView] = useState('home'); // home, study, finish, settings
+            const [cloudStatus, setCloudStatus] = useState('idle'); // idle | loading | ok | error
+            const [cloudMessage, setCloudMessage] = useState('');
             const [selectedDeck, setSelectedDeck] = useState(null); 
             const [studyQueue, setStudyQueue] = useState([]);
             const [currentCardIndex, setCurrentCardIndex] = useState(0);
@@ -116,6 +159,60 @@
             const [settingsGrade, setSettingsGrade] = useState(1);
 
             useEffect(() => { saveData(allCards); }, [allCards]);
+
+            // 每次卡片資料變更時，同步到 Firebase Firestore（備份 + 多裝置同步）
+            useEffect(() => {
+                if (!db || !userId) return;
+                setCloudStatus('loading');
+                db.collection('ankiKidsUsers')
+                    .doc(userId)
+                    .set({ cards: allCards }, { merge: true })
+                    .then(() => {
+                        setCloudStatus('ok');
+                        setCloudMessage('已同步到雲端 ' + new Date().toLocaleString());
+                    })
+                    .catch((e) => {
+                        console.error("儲存到雲端失敗", e);
+                        setCloudStatus('error');
+                        setCloudMessage('儲存到雲端失敗');
+                    });
+            }, [allCards, userId]);
+
+            // 啟動時：初始化 Firebase、取得使用者 ID，從雲端載入資料
+            useEffect(() => {
+                const init = async () => {
+                    const id = getUserIdFromLocal();
+                    setUserId(id);
+                    const _db = initFirebase();
+                    if (!_db) {
+                        setCloudStatus('error');
+                        setCloudMessage('無法初始化 Firebase，請檢查設定');
+                        return;
+                    }
+                    setCloudStatus('loading');
+                    try {
+                        const docRef = _db.collection('ankiKidsUsers').doc(id);
+                        const snap = await docRef.get();
+                        const data = snap.data();
+                        if (snap.exists && data && Array.isArray(data.cards)) {
+                            // 以雲端為主，覆蓋本地資料
+                            setAllCards(data.cards);
+                        } else {
+                            // 如果雲端還沒有資料，就把目前本地資料上傳當作初始值
+                            const local = loadData();
+                            await docRef.set({ cards: local }, { merge: true });
+                        }
+                        setIsCloudReady(true);
+                        setCloudStatus('ok');
+                        setCloudMessage('已從雲端載入 ' + new Date().toLocaleString());
+                    } catch (e) {
+                        console.error("從雲端載入失敗", e);
+                        setCloudStatus('error');
+                        setCloudMessage('從雲端載入失敗');
+                    }
+                };
+                init();
+            }, []);
 
             const getDueCount = (subject, grade) => {
                 const now = Date.now();
@@ -233,29 +330,68 @@
                 reader.readAsText(file);
             };
 
+            const handleBack = () => {
+                if (view === 'study') {
+                    const leave = window.confirm('要結束這次練習並回到首頁嗎？');
+                    if (!leave) return;
+                }
+                setView('home');
+                setSelectedDeck(null);
+                setStudyQueue([]);
+                setCurrentCardIndex(0);
+                setIsFlipped(false);
+            };
+
             // --- 視圖組件 ---
             const Header = () => (
                 <div className="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-10">
                     <div className="flex items-center gap-2">
-                        {view !== 'home' && (
-                            <button onClick={() => setView('home')} className="p-2 hover:bg-gray-100 rounded-full">
-                                <Icons.ChevronLeft className="w-6 h-6 text-gray-600" />
+                        {view !== 'home' ? (
+                            <button
+                                onClick={handleBack}
+                                className="p-2 hover:bg-gray-100 rounded-full text-gray-700 flex items-center gap-1"
+                            >
+                                <Icons.ChevronLeft className="w-5 h-5" />
+                                <span className="text-sm hidden sm:inline">返回</span>
                             </button>
-                        )}
-                        <h1 className="text-xl font-bold text-blue-600 flex items-center gap-2">
-                            <Icons.BookOpen className="w-6 h-6" />
-                            Anki 小學堂
-                        </h1>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {view === 'home' && (
-                            <button onClick={() => setView('settings')} className="p-2 hover:bg-gray-100 rounded-full text-gray-600 flex items-center gap-1">
+                        ) : (
+                            <button
+                                onClick={() => setView('settings')}
+                                className="p-2 hover:bg-gray-100 rounded-full text-gray-600 flex items-center gap-1"
+                            >
                                 <Icons.Settings className="w-5 h-5" />
                                 <span className="text-sm hidden sm:inline">設定/資料</span>
                             </button>
                         )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {userId && (
+                            <div className="flex flex-col items-end mr-2">
+                                <span className="text-xs text-gray-500">👤 {userId}</span>
+                                {cloudStatus === 'loading' && (
+                                    <span className="text-[10px] text-blue-500">☁️ 與雲端同步中…</span>
+                                )}
+                                {cloudStatus === 'ok' && (
+                                    <span className="text-[10px] text-green-600">☁️ 雲端已連線</span>
+                                )}
+                                {cloudStatus === 'error' && (
+                                    <span className="text-[10px] text-red-500">☁️ 雲端錯誤</span>
+                                )}
+                                {cloudMessage && (
+                                    <span className="text-[10px] text-gray-400 mt-0.5">{cloudMessage}</span>
+                                )}
+                            </div>
+                        )}
                         <span className="text-sm text-gray-500 hidden sm:inline ml-2">字體:</span>
-                        <input type="range" min="1" max="3" step="0.1" value={fontSize} onChange={(e) => setFontSize(parseFloat(e.target.value))} className="w-20 accent-blue-500" />
+                        <input
+                            type="range"
+                            min="1"
+                            max="3"
+                            step="0.1"
+                            value={fontSize}
+                            onChange={(e) => setFontSize(parseFloat(e.target.value))}
+                            className="w-20 accent-blue-500"
+                        />
                     </div>
                 </div>
             );
