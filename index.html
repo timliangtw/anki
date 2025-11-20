@@ -378,6 +378,75 @@
                 }
             };
 
+            const handleSwitchUser = async () => {
+                const newId = window.prompt(
+                    '請輸入要切換的小朋友名稱或帳號：',
+                    userId || ''
+                ) || '';
+
+                const trimmed = newId.trim();
+                if (!trimmed || trimmed === userId) return;
+
+                // 1. 更新 localStorage 中的使用者 ID
+                localStorage.setItem('anki-kids-user-id', trimmed);
+
+                // 2. 重設狀態，準備載入新使用者
+                setUserId(trimmed);
+                setIsCloudReady(false);
+                setCloudStatus('loading');
+                setCloudMessage('正在切換使用者，從雲端載入...');
+
+                try {
+                    const _db = db || initFirebase();
+                    if (!_db) {
+                        setCloudStatus('error');
+                        setCloudMessage('切換失敗：無法初始化 Firebase');
+                        return;
+                    }
+
+                    const docRef = _db.collection('ankiKidsUsers').doc(trimmed);
+                    const snap = await docRef.get();
+                    const data = snap.data();
+
+                    if (snap.exists && data && Array.isArray(data.cards)) {
+                        console.log(
+                            '[SWITCH] 切換到使用者',
+                            trimmed,
+                            '，從雲端載入卡片數 =',
+                            data.cards.length
+                        );
+                        // 3A. 雲端已有資料，直接用雲端覆蓋
+                        setAllCards(data.cards);
+                    } else {
+                        console.log(
+                            '[SWITCH] 使用者',
+                            trimmed,
+                            '尚無雲端資料，使用 INITIAL_DATA 當作初始值'
+                        );
+                        // 3B. 新使用者，給一份初始資料
+                        const fresh = INITIAL_DATA.map(card => ({
+                            ...card,
+                            interval: 0,
+                            reps: 0,
+                            ease: 2.5,
+                            dueDate: Date.now()
+                        }));
+                        await docRef.set({ cards: fresh }, { merge: true });
+                        setAllCards(fresh);
+                    }
+
+                    setIsCloudReady(true);
+                    setCloudStatus('ok');
+                    setCloudMessage(
+                        '已切換至使用者 ' + trimmed + '，並從雲端載入 ' + new Date().toLocaleString()
+                    );
+                } catch (e) {
+                    console.error('[SWITCH] 切換使用者失敗', e);
+                    setCloudStatus('error');
+                    setCloudMessage('切換使用者失敗，請稍後再試');
+                }
+            };
+
             // --- 視圖組件 ---
             const Header = () => {
                 const dataSizeKB = Math.round(JSON.stringify(allCards).length / 1024);
@@ -423,6 +492,12 @@
                                     </span>
                                 </div>
                             )}
+                            <button
+                                onClick={handleSwitchUser}
+                                className="px-2 py-1 text-[10px] border rounded-md text-gray-600 hover:bg-gray-100"
+                            >
+                                切換使用者
+                            </button>
                             <button
                                 onClick={reloadFromCloud}
                                 className="px-2 py-1 text-[10px] border rounded-md text-gray-600 hover:bg-gray-100"
