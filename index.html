@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>小學記憶卡 Anki Kids</title>
+    <!-- React 核心 -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel 用於解析 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS 用於樣式 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        html, body {
+            /* 防止手機雙擊縮放，並優化觸控體驗 */
+            touch-action: manipulation;
+            font-family: "Noto Sans TC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f9ff;
+            overscroll-behavior-y: none; /* 防止下拉刷新 */
+            height: 100%;
+            margin: 0;
+        }
+        .card-flip {
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+        /* 隱藏 Scrollbar 但保持功能 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+            animation: fade-in-up 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- 內建圖示元件 (解決外部引用失敗問題) ---
+        const Icons = {
+            BookOpen: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                </svg>
+            ),
+            ChevronLeft: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                    <path d="m15 18-6-6 6-6"/>
+                </svg>
+            ),
+            Home: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+                </svg>
+            ),
+            Trophy: (props) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+                </svg>
+            )
+        };
+
+        // --- 初始資料庫 (Mock Data for Taiwan Elementary School) ---
+        const INITIAL_DATA = [
+            // --- 國語 ---
+            { id: 'm1-1', subject: 'mandarin', grade: 1, front: '天', back: 'ㄊㄧㄢ', context: '今天天氣很好。', level: 'new' },
+            { id: 'm1-2', subject: 'mandarin', grade: 1, front: '大', back: 'ㄉㄚˋ', context: '這顆蘋果很大。', level: 'new' },
+            { id: 'm1-3', subject: 'mandarin', grade: 1, front: '手', back: 'ㄕㄡˇ', context: '請把手洗乾淨。', level: 'new' },
+            { id: 'm2-1', subject: 'mandarin', grade: 2, front: '海', back: 'ㄏㄞˇ', context: '我想去海邊玩水。', level: 'new' },
+            { id: 'm2-2', subject: 'mandarin', grade: 2, front: '亮', back: 'ㄌㄧㄤˋ', context: '月亮出來了。', level: 'new' },
+            { id: 'm3-1', subject: 'mandarin', grade: 3, front: '無論', back: 'ㄨˊ ㄌㄨㄣˋ', context: '無論發生什麼事，我都會陪著你。', level: 'new' },
+            { id: 'm3-2', subject: 'mandarin', grade: 3, front: '希望', back: 'ㄒㄧ ㄨㄤˋ', context: '我希望明天不用考試。', level: 'new' },
+            { id: 'm4-1', subject: 'mandarin', grade: 4, front: '猶豫', back: 'ㄧㄡˊ ㄩˋ', context: '他猶豫了很久，不知道該選哪一個。', level: 'new' },
+            { id: 'm5-1', subject: 'mandarin', grade: 5, front: '蜿蜒', back: 'ㄨㄢ ㄧㄢˊ', context: '這條河流蜿蜒流過平原。', level: 'new' },
+            { id: 'm6-1', subject: 'mandarin', grade: 6, front: '躊躇', back: 'ㄔㄡˊ ㄔㄨˊ', context: '他在門口躊躇不前，不敢進去。', level: 'new' },
+            
+            // --- 英文 ---
+            { id: 'e1-1', subject: 'english', grade: 1, front: 'Apple', back: '蘋果', context: 'I like to eat apples.', level: 'new' },
+            { id: 'e1-2', subject: 'english', grade: 1, front: 'Red', back: '紅色', context: 'The car is red.', level: 'new' },
+            { id: 'e1-3', subject: 'english', grade: 1, front: 'Cat', back: '貓', context: 'The cat is sleeping.', level: 'new' },
+            { id: 'e2-1', subject: 'english', grade: 2, front: 'Tiger', back: '老虎', context: 'Tigers are big cats.', level: 'new' },
+            { id: 'e2-2', subject: 'english', grade: 2, front: 'Jump', back: '跳', context: 'Can you jump high?', level: 'new' },
+            { id: 'e3-1', subject: 'english', grade: 3, front: 'Beautiful', back: '美麗的', context: 'The flower is beautiful.', level: 'new' },
+            { id: 'e3-2', subject: 'english', grade: 3, front: 'Teacher', back: '老師', context: 'My teacher works hard.', level: 'new' },
+            { id: 'e4-1', subject: 'english', grade: 4, front: 'Delicious', back: '美味的', context: 'This soup is delicious.', level: 'new' },
+            { id: 'e4-2', subject: 'english', grade: 4, front: 'Yesterday', back: '昨天', context: 'I went to the park yesterday.', level: 'new' },
+            { id: 'e5-1', subject: 'english', grade: 5, front: 'Environment', back: '環境', context: 'We should protect the environment.', level: 'new' },
+            { id: 'e6-1', subject: 'english', grade: 6, front: 'Pollution', back: '汙染', context: 'Air pollution is a big problem.', level: 'new' },
+            { id: 'e6-2', subject: 'english', grade: 6, front: 'Diligent', back: '勤勉的', context: 'He is a diligent student.', level: 'new' },
+        ];
+
+        // --- Helper Functions ---
+        
+        const loadData = () => {
+            try {
+                const saved = localStorage.getItem('anki-kids-data-v1');
+                if (saved) {
+                    return JSON.parse(saved);
+                }
+            } catch (e) {
+                console.error("讀取資料失敗，使用預設值", e);
+            }
+            // 初始化
+            return INITIAL_DATA.map(card => ({
+                ...card,
+                interval: 0,
+                reps: 0,
+                ease: 2.5,
+                dueDate: Date.now()
+            }));
+        };
+
+        const saveData = (data) => {
+            try {
+                localStorage.setItem('anki-kids-data-v1', JSON.stringify(data));
+            } catch (e) {
+                console.error("儲存資料失敗", e);
+            }
+        };
+
+        // --- 主程式 App ---
+        function App() {
+            const [allCards, setAllCards] = useState(loadData);
+            const [view, setView] = useState('home'); // home, study, finish
+            const [selectedDeck, setSelectedDeck] = useState(null); // { subject, grade }
+            const [studyQueue, setStudyQueue] = useState([]);
+            const [currentCardIndex, setCurrentCardIndex] = useState(0);
+            const [isFlipped, setIsFlipped] = useState(false);
+            const [fontSize, setFontSize] = useState(1.5); // rem unit
+
+            useEffect(() => {
+                saveData(allCards);
+            }, [allCards]);
+
+            const getDueCount = (subject, grade) => {
+                const now = Date.now();
+                return allCards.filter(c => 
+                    c.subject === subject && 
+                    c.grade === grade && 
+                    c.dueDate <= now
+                ).length;
+            };
+
+            const startStudy = (subject, grade) => {
+                const now = Date.now();
+                const queue = allCards.filter(c => 
+                    c.subject === subject && 
+                    c.grade === grade && 
+                    c.dueDate <= now
+                );
+                
+                const shuffled = queue.sort(() => Math.random() - 0.5);
+
+                if (shuffled.length === 0) {
+                    // 使用 setTimeout 避免 React 渲染中斷
+                    setTimeout(() => alert("太棒了！這個科目目前沒有需要複習的卡片。"), 100);
+                    return;
+                }
+
+                setSelectedDeck({ subject, grade });
+                setStudyQueue(shuffled);
+                setCurrentCardIndex(0);
+                setIsFlipped(false);
+                setView('study');
+            };
+
+            const handleRate = (rating) => {
+                const currentCard = studyQueue[currentCardIndex];
+                let { interval, reps, ease } = currentCard;
+
+                if (rating === 0) { // Again
+                    reps = 0;
+                    interval = 0;
+                } else {
+                    if (rating === 1) { // Hard
+                        ease = Math.max(1.3, ease - 0.15);
+                        interval = interval === 0 ? 1 : interval * 1.2;
+                    } else if (rating === 2) { // Good
+                        interval = interval === 0 ? 1 : (reps === 1 ? 6 : interval * ease);
+                    } else if (rating === 3) { // Easy
+                        ease += 0.15;
+                        interval = interval === 0 ? 4 : interval * ease * 1.3;
+                    }
+                    reps += 1;
+                }
+
+                let newDueDate = Date.now();
+                if (rating > 0) {
+                    newDueDate = Date.now() + (Math.ceil(interval) * 24 * 60 * 60 * 1000);
+                }
+
+                const updatedCard = { ...currentCard, interval, reps, ease, dueDate: newDueDate };
+                const newAllCards = allCards.map(c => c.id === updatedCard.id ? updatedCard : c);
+                setAllCards(newAllCards);
+
+                if (rating === 0) {
+                    setStudyQueue([...studyQueue, currentCard]); 
+                    setIsFlipped(false);
+                    setCurrentCardIndex(prev => prev + 1); 
+                } else {
+                    setIsFlipped(false);
+                    if (currentCardIndex < studyQueue.length - 1) {
+                        setCurrentCardIndex(prev => prev + 1);
+                    } else {
+                        setView('finish');
+                    }
+                }
+            };
+
+            const Header = () => (
+                <div className="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-10">
+                    <div className="flex items-center gap-2">
+                        {view !== 'home' && (
+                            <button onClick={() => setView('home')} className="p-2 hover:bg-gray-100 rounded-full">
+                                <Icons.ChevronLeft className="w-6 h-6 text-gray-600" />
+                            </button>
+                        )}
+                        <h1 className="text-xl font-bold text-blue-600 flex items-center gap-2">
+                            <Icons.BookOpen className="w-6 h-6" />
+                            Anki 小學堂
+                        </h1>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500 hidden sm:inline">字體:</span>
+                        <input 
+                            type="range" 
+                            min="1" max="3" step="0.1" 
+                            value={fontSize} 
+                            onChange={(e) => setFontSize(parseFloat(e.target.value))}
+                            className="w-20 accent-blue-500"
+                        />
+                    </div>
+                </div>
+            );
+
+            const HomeView = () => (
+                <div className="p-4 max-w-4xl mx-auto pb-20">
+                    <div className="mb-8 bg-blue-100 p-6 rounded-2xl border-2 border-blue-200 text-center">
+                        <h2 className="text-2xl font-bold text-blue-800 mb-2">歡迎回來！</h2>
+                        <p className="text-blue-600">今天有 <span className="font-bold text-red-500 text-xl">{allCards.filter(c => c.dueDate <= Date.now()).length}</span> 張卡片需要複習喔。</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* 國語區塊 */}
+                        <div className="bg-white rounded-2xl shadow-md overflow-hidden border-2 border-orange-100">
+                            <div className="bg-orange-100 p-3 font-bold text-orange-800 flex items-center gap-2">
+                                <span className="text-2xl">🇹🇼</span> 國語 (國字、注音)
+                            </div>
+                            <div className="p-4 grid grid-cols-3 gap-3">
+                                {[1, 2, 3, 4, 5, 6].map(grade => {
+                                    const count = getDueCount('mandarin', grade);
+                                    return (
+                                        <button 
+                                            key={grade}
+                                            onClick={() => startStudy('mandarin', grade)}
+                                            className={`aspect-square rounded-xl flex flex-col items-center justify-center border-2 transition-all active:scale-95 ${
+                                                count > 0 ? 'bg-orange-50 border-orange-200 hover:bg-orange-100' : 'bg-gray-50 border-gray-100 text-gray-400'
+                                            }`}
+                                        >
+                                            <span className="text-2xl font-bold">{grade}</span>
+                                            <span className="text-xs">年級</span>
+                                            {count > 0 && (
+                                                <span className="mt-1 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                                                    {count}
+                                                </span>
+                                            )}
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </div>
+
+                        {/* 英文區塊 */}
+                        <div className="bg-white rounded-2xl shadow-md overflow-hidden border-2 border-indigo-100">
+                            <div className="bg-indigo-100 p-3 font-bold text-indigo-800 flex items-center gap-2">
+                                <span className="text-2xl">🇺🇸</span> English (單字)
+                            </div>
+                            <div className="p-4 grid grid-cols-3 gap-3">
+                                {[1, 2, 3, 4, 5, 6].map(grade => {
+                                    const count = getDueCount('english', grade);
+                                    return (
+                                        <button 
+                                            key={grade}
+                                            onClick={() => startStudy('english', grade)}
+                                            className={`aspect-square rounded-xl flex flex-col items-center justify-center border-2 transition-all active:scale-95 ${
+                                                count > 0 ? 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100' : 'bg-gray-50 border-gray-100 text-gray-400'
+                                            }`}
+                                        >
+                                            <span className="text-2xl font-bold">{grade}</span>
+                                            <span className="text-xs">Grade</span>
+                                            {count > 0 && (
+                                                <span className="mt-1 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                                                    {count}
+                                                </span>
+                                            )}
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            const StudyView = () => {
+                const card = studyQueue[currentCardIndex];
+                if (!card) return null;
+
+                const progress = ((currentCardIndex) / studyQueue.length) * 100;
+
+                return (
+                    <div className="flex flex-col h-[calc(100vh-70px)] bg-gray-100">
+                        <div className="h-2 bg-gray-200 w-full">
+                            <div className="h-full bg-green-500 transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                        </div>
+
+                        <div className="flex-1 flex items-center justify-center p-4">
+                            <div className="relative w-full max-w-xl aspect-[4/5] md:aspect-[16/9] perspective-1000">
+                                <div className={`relative w-full h-full bg-white rounded-3xl shadow-xl flex flex-col items-center justify-center p-8 text-center border-2 border-gray-200 transition-all duration-300`}>
+                                    
+                                    <div className="mb-8">
+                                        <span className="inline-block bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-sm mb-4">
+                                            {card.subject === 'mandarin' ? '怎麼唸？' : 'What is this?'}
+                                        </span>
+                                        <h2 className="font-bold text-gray-800" style={{ fontSize: `${fontSize * 2}rem` }}>
+                                            {card.front}
+                                        </h2>
+                                    </div>
+
+                                    {isFlipped && (
+                                        <div className="animate-fade-in-up w-full pt-6 border-t-2 border-dashed border-gray-200">
+                                            <div className="text-red-500 font-bold mb-2" style={{ fontSize: `${fontSize * 1.2}rem` }}>
+                                                {card.back}
+                                            </div>
+                                            <div className="text-gray-600 bg-gray-50 p-4 rounded-xl" style={{ fontSize: `${fontSize}rem` }}>
+                                                {card.context}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {!isFlipped && (
+                                        <button 
+                                            onClick={() => setIsFlipped(true)}
+                                            className="absolute inset-0 w-full h-full cursor-pointer opacity-0"
+                                        >
+                                            Reveal
+                                        </button>
+                                    )}
+                                    
+                                    {!isFlipped && (
+                                        <div className="absolute bottom-8 text-gray-400 text-sm animate-pulse pointer-events-none">
+                                            點擊卡片看答案
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="h-auto bg-white border-t p-4 pb-8 md:pb-4 shadow-lg z-20">
+                            {!isFlipped ? (
+                                <button 
+                                    onClick={() => setIsFlipped(true)}
+                                    className="w-full bg-blue-500 hover:bg-blue-600 text-white py-4 rounded-xl text-xl font-bold shadow-md transition-transform active:scale-95"
+                                >
+                                    顯示答案
+                                </button>
+                            ) : (
+                                <div className="grid grid-cols-4 gap-2 md:gap-4">
+                                    <button onClick={() => handleRate(0)} className="flex flex-col items-center bg-red-100 text-red-700 py-3 rounded-xl border border-red-200 active:bg-red-200">
+                                        <span className="font-bold text-lg">Again</span>
+                                        <span className="text-xs opacity-70">忘記了</span>
+                                    </button>
+                                    <button onClick={() => handleRate(1)} className="flex flex-col items-center bg-yellow-100 text-yellow-700 py-3 rounded-xl border border-yellow-200 active:bg-yellow-200">
+                                        <span className="font-bold text-lg">Hard</span>
+                                        <span className="text-xs opacity-70">有點難</span>
+                                    </button>
+                                    <button onClick={() => handleRate(2)} className="flex flex-col items-center bg-green-100 text-green-700 py-3 rounded-xl border border-green-200 active:bg-green-200">
+                                        <span className="font-bold text-lg">Good</span>
+                                        <span className="text-xs opacity-70">剛好</span>
+                                    </button>
+                                    <button onClick={() => handleRate(3)} className="flex flex-col items-center bg-blue-100 text-blue-700 py-3 rounded-xl border border-blue-200 active:bg-blue-200">
+                                        <span className="font-bold text-lg">Easy</span>
+                                        <span className="text-xs opacity-70">太簡單</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            };
+
+            const FinishView = () => (
+                <div className="flex flex-col items-center justify-center min-h-[80vh] p-4 text-center animate-fade-in">
+                    <div className="bg-yellow-100 p-8 rounded-full mb-6">
+                        <Icons.Trophy className="w-24 h-24 text-yellow-600" />
+                    </div>
+                    <h2 className="text-3xl font-bold text-gray-800 mb-4">恭喜完成！</h2>
+                    <p className="text-xl text-gray-600 mb-8">
+                        {selectedDeck.grade} 年級 {selectedDeck.subject === 'mandarin' ? '國語' : '英文'} 複習完畢。
+                    </p>
+                    <div className="flex gap-4">
+                        <button 
+                            onClick={() => setView('home')}
+                            className="bg-blue-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition-all flex items-center gap-2"
+                        >
+                            <Icons.Home className="w-5 h-5" /> 回首頁
+                        </button>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen bg-gray-50 text-gray-900">
+                    <Header />
+                    {view === 'home' && <HomeView />}
+                    {view === 'study' && <StudyView />}
+                    {view === 'finish' && <FinishView />}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
